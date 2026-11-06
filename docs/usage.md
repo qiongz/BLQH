@@ -1,5 +1,7 @@
 # Usage and phase diagrams
 
+The square-torus Laughlin alignment is in [alignment.md](alignment.md).
+
 ## Filling
 
 The total filling is \(\nu_T=\nu_\mathrm{upper}+\nu_\mathrm{lower}\). The imbalance follows Champagne's definition

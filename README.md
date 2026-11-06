@@ -20,6 +20,8 @@ OMP_NUM_THREADS=80 MKL_NUM_THREADS=80 ./build/fqhe check 80
 ./build/fqhe check 80 full    # also the 6-electron monolayer Laughlin state
 ```
 
+The square-torus Laughlin alignment, ground-state energies and the dispersion \(E(k\ell)\), is in [docs/alignment.md](docs/alignment.md). That is the numerical example a new build should match before any other scan.
+
 `check` verifies:
 
 - Monolayer Laughlin \(\nu=1/3\): the full spectra for 4 and 5 electrons, and, with `full`, the 6-electron ground-state energy and its 3-fold degeneracy
