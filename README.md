@@ -20,12 +20,12 @@ OMP_NUM_THREADS=80 MKL_NUM_THREADS=80 ./build/fqhe check 80
 ./build/fqhe check 80 full    # also the 6-electron monolayer Laughlin state
 ```
 
-The square-torus Laughlin alignment, ground-state energies and the dispersion \(E(k\ell)\), is in [docs/alignment.md](docs/alignment.md). That is the numerical example a new build should match before any other scan.
+The square-torus Laughlin alignment, ground-state energies and the dispersion $`E(k\ell)`$, is in [docs/alignment.md](docs/alignment.md). That is the numerical example a new build should match before any other scan.
 
 `check` verifies:
 
-- Monolayer Laughlin \(\nu=1/3\): the full spectra for 4 and 5 electrons, and, with `full`, the 6-electron ground-state energy and its 3-fold degeneracy
-- Bilayer Halperin 111: \(N_\phi=8\), 4 electrons per layer, \(d=0\), \(J=K=4\), ground-state energy per electron \(-0.636707\)
+- Monolayer Laughlin $`\nu=1/3`$: the full spectra for 4 and 5 electrons, and, with `full`, the 6-electron ground-state energy and its 3-fold degeneracy
+- Bilayer Halperin 111: $`N_\phi=8`$, 4 electrons per layer, $`d=0`$, $`J=K=4`$, ground-state energy per electron $`-0.636707`$
 - Analytic level shifts from bias, Zeeman, interlayer tunneling, and spin-flip tunneling
 
 ## Parameters
@@ -34,20 +34,20 @@ Describe the two layers with `Layers`, or pass the same fields on the command li
 
 | Flag | Meaning |
 | --- | --- |
-| `--nphi` | Number of flux quanta \(N_\phi\) |
+| `--nphi` | Number of flux quanta $`N_\phi`$ |
 | `--upper`, `--lower` | Electrons in each layer, or a filling `p/q` (`nphi * p` must be divisible by `q`) |
 | `--spin` | Four flavors: upper up, upper down, lower up, lower down. Omit it for two layers and no spin |
 | `--free` | Fix only the total electron number. Required when tunneling changes layer or spin |
-| `--d` | Layer separation \(d/\ell\) |
-| `--bias` | Interlayer potential. Positive raises each upper-layer electron by \(\Delta_V/2\) |
-| `--zeeman` | Zeeman energy. Positive raises each spin-up electron by \(\Delta_Z/2\) |
+| `--d` | Layer separation $`d/\ell`$ |
+| `--bias` | Interlayer potential. Positive raises each upper-layer electron by $`\Delta_V/2`$ |
+| `--zeeman` | Zeeman energy. Positive raises each spin-up electron by $`\Delta_Z/2`$ |
 | `--tunnel` | Spin-conserving interlayer tunneling |
 | `--spin-flip` | Spin-changing interlayer tunneling |
 | `--J`, `--K` | Magnetic-translation sector. `-1` means no projection |
 
 If the four spin counts are omitted, a spinful run puts every electron in spin up. Set them with `--upper-up`, `--upper-down`, `--lower-up`, and `--lower-down`.
 
-One determinant is a `uint64_t`. Each flavor occupies a contiguous block of \(N_\phi\) bits, so \(N_\phi\le 16\) with four flavors and \(N_\phi\le 32\) with two. Pauli exclusion is the rule that a bit is set at most once.
+One determinant is a `uint64_t`. Each flavor occupies a contiguous block of $`N_\phi`$ bits, so $`N_\phi\le 16`$ with four flavors and $`N_\phi\le 32`$ with two. Pauli exclusion is the rule that a bit is set at most once.
 
 ## Commands
 
