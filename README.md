@@ -1,109 +1,92 @@
 # BLQH
-Exact diagonalization of bilayer quantum Hall (BLQH) systems in the torus geometry
 
-## Description
-This program performs exact diagonalization and calculation the excitation spectrum of the bilayer/monolayer quantum Hall
-system (BLQH/MLQH) in the torus geometry and in the lowest-Landau-level (LLL). The bilayer quantum Hall system contains two layers of two-dimensional electron gas (2DEG), with intralayer and interlayer Coulomb interaction. Including the spin degrees of freedom, the noninteracting hamiltonian with bias voltage, Zeeman splitting energy and interlayer tunneling (symmetric-antisymmetric energy gap) can be included. Exact diagonalizing the full hamiltonian matrix, we could get all the eigenstates and analyze the results. To shrink the Hilbert space, and simplify the calculation, we utilize the magnetic translation operators in x and y directions, and then apply a three-pass Lanczos algorithm to calculate the lowest eigenstate at each K-point.
-### BLQH_with_spin
-Final version of the program, which performs calculation with electron spin degree of freedom included for the BLQH system, realize all the functions as described above. This program is universal and with upper layer electrons or spin-up electrons set to zero, it could be easily reduced to spinless or monolayer system.
-### BLQH_without_spin
-2nd version of the program, performs calculation for BLQH with electron spin degree of freedom quenched.
-### MLQH
-1st version of the program, performs monolayer fractional quantum Hall (FQHE) system with electron spin degree of freedom quenched.
-## Prerequisites
-Environment:linux
+Exact diagonalization of quantum Hall systems on the torus, in the lowest Landau level. A monolayer, a spinless bilayer, and a spinful bilayer share one pipeline: a flavor list builds a Fock sector, the sector builds one sparse Hamiltonian, and a dense eigensolver or Lanczos diagonalizes it.
 
-Libraries:
+The previous three programs are kept on the `legacy` branch.
 
-* icc,mkl: https://software.intel.com/en-us/parallel-studio-xe
+## Build
 
-* g++,liblapack-dev,libblas-dev
+Requires C++17, OpenMP, and oneMKL (LP64, GNU OpenMP threading). The same link line is used on Intel and on AMD EPYC. `icpc` is not required.
 
-* GNU Scientific Library(GSL): https://www.gnu.org/software/gsl/
+```bash
+cmake -S . -B build -DMKLROOT=/opt/intel/oneapi/mkl/2025.2
+cmake --build build -j
+```
 
-## Installing
-ubuntu:
+The executable is `build/fqhe`. Regression:
 
->sudo apt-get install g++ g++-multilib build-essential liblapack-dev libblas-dev libgsl-dev
->
->make blqh
+```bash
+OMP_NUM_THREADS=80 MKL_NUM_THREADS=80 ./build/fqhe check 80
+./build/fqhe check 80 full    # also the 6-electron monolayer Laughlin state
+```
 
-with icc,mkl installed:
->make blqh_mkl
-## Usage
-<pre><code>./blqh -h  
-./blqh: option requires an argument -- 'h'   
-Usage: ./blqh [Options]  
-Options:  
-  -l                       nLL  
-  -n                       nphi  
-  -e                       Total No. of electrons in two layers  
-  -u                       No. of electrons in upper-layer  
-  -k                       kx in upper-layer  
-  -S                       Delta_SAS: tunnelling amplitude  
-  -v                       Delta_V: bias voltage  
-  -j                       total J in upper-layer or down-layer  
-  -g                       gamma=lx/ly  aspect ratio  
-  -d                       interlayer distance  
-  -m                       Lambda  
-  -t                       nthread  
-  -s                       seed  
-Default: (l,n,u,d,lambda) = (4,4,2,1,200)  
-</code></pre>
+`check` verifies:
 
-## Running the tests
-### BLQH_without_spin
-We calculate 8-electrons with 4-electrons in the upper-layer and 4-electrons in  
-the down layer at layer distance d/l=0.0. The ground state energy is at K-point (j,k)=(4,4), we use four threads to calculate the hamiltonian.
-> ./blqh -n 8 -e 8 -u 4 -j 4 -k 4 -t 4 -d 0.0
-<pre><code>----------- ED results --------------
-nHilbert: =79
-E_gs:= -0.636707
------------ Lanczos results ---------
-E_gs:= -0.6367069257
-# ground state wave function
-  71 :   |  _  1  2  3  4  _  _  _)|  0  _  _  _  _  5  6  7)   000000001110000100011110  0.3380617019
-   6 :   |  0  _  _  _  4  _  6  7)|  _  1  2  3  _  5  _  _)   000000000010111011010001  0.3380617019
-  48 :   |  0  _  _  _  4  5  6  _)|  _  1  2  3  _  _  _  7)   000000001000111001110001  0.3380617019
-  29 :   |  0  _  2  _  _  5  _  7)|  _  1  _  3  4  _  6  _)   000000000101101010100101  0.3380617019
-  20 :   |  0  _  _  _  4  5  _  7)|  _  1  2  3  _  _  6  _)   000000000100111010110001  0.3380617019
-  10 :   |  0  _  _  3  _  _  6  7)|  _  1  2  _  4  5  _  _)   000000000011011011001001  0.3380617019
-  54 :   |  0  _  2  _  _  5  6  _)|  _  1  _  3  4  _  _  7)   000000001001101001100101  0.3380617019
-  25 :   |  0  _  _  3  _  5  _  7)|  _  1  2  _  4  _  6  _)   000000000101011010101001  0.3380617019
-  66 :   |  0  1  _  _  4  5  _  _)|  _  _  2  3  _  _  6  7)   000000001100110000110011  0.2390457219
-  57 :   |  0  _  2  _  4  _  6  _)|  _  1  _  3  _  5  _  7)   000000001010101001010101  0.1690308509
-  19 :   |  0  _  _  _  4  _  6  7)|  0  _  2  3  _  _  6  _)   000000000100110111010001  1.306913788e-13
-</code></pre>
+- Monolayer Laughlin \(\nu=1/3\): the full spectra for 4 and 5 electrons, and, with `full`, the 6-electron ground-state energy and its 3-fold degeneracy
+- Bilayer Halperin 111: \(N_\phi=8\), 4 electrons per layer, \(d=0\), \(J=K=4\), ground-state energy per electron \(-0.636707\)
+- Analytic level shifts from bias, Zeeman, interlayer tunneling, and spin-flip tunneling
 
-The ground state energies of ED and Lanczos approaches are the same within accuracy of 1E-5.   
-The first column of the wave function (WF) is the ID of the basis, the |\*\*)|\*\*) columns are
-electrons which occupy the orbitals ('_' stands for not occupied,left for upper-layer and right for down-layer). the next column is
-the electron occupaptions in binary representation ('1' for occupied and '0' for empty), and the last column are the coefficients in the many-body basis.  
-As we can see, at d/l=0.0, all the basis with nonzero coefficients are Haplerin "111 state".
+## Parameters
 
-At distance d/l=3.0, we could see that the all the basis with nonzero coefficients are two decoupled composite Fermi liquids.
-> ./blqh -n 8 -e 8 -u 4 -j 4 -k 4 -t 4 -d 3.0
-<pre><code>----------- ED results --------------
-nHilbert: =79
-E_gs:= -1.23588
------------ Lanczos results ---------
-E_gs:= -1.235882219
-# ground state wave function
-  66 :   |  0  1  _  _  4  5  _  _)|  _  _  2  3  _  _  6  7)   000000001100110000110011  0.5388040068
-  52 :   |  0  _  _  3  4  _  _  7)|  0  _  _  3  4  _  _  7)   000000001001100110011001  0.530402778
-  51 :   |  _  1  _  3  4  _  6  _)|  0  _  _  3  4  _  _  7)   000000001001100101011010  0.3033881081
-  33 :   |  0  _  2  _  _  5  _  7)|  _  1  2  _  _  5  6  _)   000000000110011010100101  0.3033881081
-   5 :   |  _  _  2  3  _  _  6  7)|  0  _  2  3  _  5  _  _)   000000000010110111001100  0.3033881081
-  68 :   |  0  1  _  _  4  5  _  _)|  _  1  _  _  4  _  6  7)   000000001101001000110011  0.3033881081
-  29 :   |  0  _  2  _  _  5  _  7)|  _  1  _  3  4  _  6  _)   000000000101101010100101  0.1269396409
-  55 :   |  0  _  _  3  _  5  6  _)|  0  _  2  _  _  5  _  7)   000000001010010101101001  0.1215007838
-  35 :   |  0  _  2  _  _  5  _  7)|  0  _  _  3  _  5  6  _)   000000000110100110100101  0.1215007838
-  34 :   |  0  _  _  3  _  5  6  _)|  0  _  _  3  _  5  6  _)   000000000110100101101001  0.1173494879
-   3 :   |  0  1  _  _  4  5  _  _)|  _  1  2  3  4  _  _  _)   000000000001111000110011  0.009704390136
-</code></pre>
+Describe the two layers with `Layers`, or pass the same fields on the command line.
 
+| Flag | Meaning |
+| --- | --- |
+| `--nphi` | Number of flux quanta \(N_\phi\) |
+| `--upper`, `--lower` | Electrons in each layer, or a filling `p/q` (`nphi * p` must be divisible by `q`) |
+| `--spin` | Four flavors: upper up, upper down, lower up, lower down. Omit it for two layers and no spin |
+| `--free` | Fix only the total electron number. Required when tunneling changes layer or spin |
+| `--d` | Layer separation \(d/\ell\) |
+| `--bias` | Interlayer potential. Positive raises each upper-layer electron by \(\Delta_V/2\) |
+| `--zeeman` | Zeeman energy. Positive raises each spin-up electron by \(\Delta_Z/2\) |
+| `--tunnel` | Spin-conserving interlayer tunneling |
+| `--spin-flip` | Spin-changing interlayer tunneling |
+| `--J`, `--K` | Magnetic-translation sector. `-1` means no projection |
 
-## Contributing
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+If the four spin counts are omitted, a spinful run puts every electron in spin up. Set them with `--upper-up`, `--upper-down`, `--lower-up`, and `--lower-down`.
+
+One determinant is a `uint64_t`. Each flavor occupies a contiguous block of \(N_\phi\) bits, so \(N_\phi\le 16\) with four flavors and \(N_\phi\le 32\) with two. Pauli exclusion is the rule that a bit is set at most once.
+
+## Commands
+
+```bash
+# Upper layer at 1/3, lower layer at 2/3, with spin
+./build/fqhe point --nphi 6 --upper 1/3 --lower 2/3 --spin --free \
+  --d 1 --bias 0 --zeeman 0.05 --tunnel 0.02 --wf 8
+
+# Lowest energy versus layer separation
+./build/fqhe scan-d --nphi 6 --upper 1/2 --lower 1/2 --spin --free \
+  --d 0:2:0.25 --zeeman 0.05 --out scan_d.csv
+
+# Bias versus tunneling. Use --y spin-flip to sweep the spin-flip channel
+./build/fqhe scan-phase --nphi 6 --upper 1/2 --lower 1/2 --spin --free \
+  --x bias --y tunnel --bias -0.2:0.2:0.05 --tunnel 0:0.2:0.05 \
+  --d 1 --zeeman 0.05 --out phase.csv
+
+# d/l versus filling imbalance Delta nu = nu_upper - nu_lower. Total filling defaults to 1
+./build/fqhe scan-imbalance --nphi 6 --nu-total 1 \
+  --d 0:2:0.25 --delta-nu 0:1 --out imbalance.csv
+```
+
+Dimensions up to 800 are diagonalized densely, and a few excitations above the ground state are reported. Larger sectors use Lanczos and keep the ground state. `--dense` or `--lanczos` forces the choice.
+
+Columns and order parameters are defined in [docs/usage.md](docs/usage.md).
+
+## Layout
+
+```text
+include/blqh/fqhe.hpp    parameters, sector, Hamiltonian, solvers, order parameters
+src/sector.cpp           flavors, combinations, magnetic translations
+src/hamiltonian.cpp      Coulomb interaction, one-body fields, CSR
+src/solve.cpp            MKL ZHEEVD and Lanczos
+src/observe.cpp          order parameters
+src/cli.cpp              command line
+src/check.cpp            regression
+tests/ref/               monolayer reference spectra
+```
+
+The dense path calls MKL `LAPACKE_zheevd`. A different LAPACK build or a later GPU solver replaces `src/solve.cpp` and the link line. The sector and the Hamiltonian stay put. Lanczos reads the same CSR.
+
 ## License
+
 [MIT](https://choosealicense.com/licenses/mit/)
