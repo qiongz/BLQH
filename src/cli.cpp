@@ -57,6 +57,7 @@ struct Opt {
     std::string yname = "tunnel";
     bool dense = false;
     bool lanczos = false;
+    blqh::LanczosKernel kernel = blqh::LanczosKernel::Scalar;
     int steps = 80;
     int threads = 80;
     unsigned seed = 1;
@@ -80,6 +81,8 @@ Opt parse(int argc, char **argv) {
         else if (flag == "--free") opt.layers.fix_flavor = false;
         else if (flag == "--dense") opt.dense = true;
         else if (flag == "--lanczos") opt.lanczos = true;
+        else if (flag == "--lanczos-kernel")
+            opt.kernel = blqh::lanczos_kernel_from_name(need(i, argc, argv, flag));
         else if (flag == "--nphi") opt.layers.nphi = std::stoi(need(i, argc, argv, flag));
         else if (flag == "--upper") opt.upper = need(i, argc, argv, flag);
         else if (flag == "--lower") opt.lower = need(i, argc, argv, flag);
@@ -153,15 +156,20 @@ struct Sample {
     blqh::GroundState state;
     blqh::Order order;
     int dim = 0;
+    std::string solver = "lanczos";
 };
 
 Sample evaluate(const blqh::Layers &layers, const Opt &opt) {
     const blqh::System sys = blqh::make_layers(layers);
     const blqh::Sector sector = blqh::build_sector(sys);
     const blqh::Csr H = blqh::build_hamiltonian(sys, sector, blqh::make_geometry(sys));
-    const bool dense = opt.dense || (!opt.lanczos && sector.nbasis <= 800);
+    const bool want_lanczos = opt.lanczos || opt.kernel != blqh::LanczosKernel::Scalar;
+    const bool dense = opt.dense || (!want_lanczos && sector.nbasis <= 800);
     Sample sample;
-    sample.state = blqh::lowest_state(H, dense, opt.steps, opt.seed);
+    sample.state = blqh::lowest_state(H, dense, opt.steps, opt.seed, opt.kernel, opt.threads);
+    if (dense) sample.solver = "dense";
+    else if (opt.kernel == blqh::LanczosKernel::Scalar) sample.solver = "lanczos";
+    else sample.solver = std::string("lanczos-") + blqh::lanczos_kernel_name(opt.kernel);
     sample.order = blqh::measure(sys, sector, sample.state.psi);
     sample.dim = sector.nbasis;
     return sample;
@@ -192,7 +200,7 @@ void write_row(std::ostream &out, const blqh::Layers &layers, const Sample &samp
     out << layers.fields.distance << ',' << (nu_u - nu_l) << ',' << nu_u << ',' << nu_l << ','
         << layers.n_upper << ',' << layers.n_lower << ',' << layers.fields.bias << ',' << layers.fields.zeeman
         << ',' << layers.fields.tunneling << ',' << layers.fields.spin_flip << ',' << sample.dim << ','
-        << (sample.state.dense ? "dense" : "lanczos") << ',' << sample.state.energy << ','
+        << sample.solver << ',' << sample.state.energy << ','
         << sample.state.energy / nel << ',' << gap << ',' << o.sz << ',' << o.layer << ',' << o.n_uu << ','
         << o.n_ud << ',' << o.n_du << ',' << o.n_dd << ',' << o.coh_sas << ',' << o.coh_sf << ','
         << o.fluc_sas << ',' << o.fluc_af << ',' << o.ex_sas << ',' << o.phase << '\n';
@@ -200,10 +208,12 @@ void write_row(std::ostream &out, const blqh::Layers &layers, const Sample &samp
 
 void usage() {
     std::cerr
+        << "fqhe dump-ham --nel N [--J j] [--dims] [--estimate] [--out ham.npz]\n"
         << "fqhe check [threads] [full]\n"
         << "fqhe point --nphi N --upper 1/3 --lower 2/3 [--spin] [--free]\n"
         << "           [--d 1] [--bias 0] [--zeeman 0] [--tunnel 0] [--spin-flip 0]\n"
         << "           [--J -1 --K -1] [--wf 8] [--out point.csv]\n"
+        << "           [--lanczos] [--lanczos-kernel scalar|mkl|gluon] [--steps 40]\n"
         << "fqhe scan-d --nphi N --upper 1/3 --lower 2/3 --spin --free --d 0:2:0.25 [--out scan.csv]\n"
         << "fqhe scan-phase --nphi N --upper 1/2 --lower 1/2 --spin --free\n"
         << "           --x bias --y tunnel --bias -0.2:0.2:0.1 --tunnel 0:0.2:0.1 [--out phase.csv]\n"
@@ -224,6 +234,7 @@ void usage() {
 
 int main(int argc, char **argv) {
     try {
+        if (argc >= 2 && std::string(argv[1]) == "dump-ham") return blqh::dump_ham_main(argc, argv);
         Opt opt = parse(argc, argv);
         if (opt.command == "help" || opt.command == "-h" || opt.command == "--help") {
             usage();

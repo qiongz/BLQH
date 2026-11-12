@@ -11,9 +11,12 @@ add_executable(fqhe
     src/sector.cpp
     src/hamiltonian.cpp
     src/solve.cpp
+    src/lanczos_mkl.cpp
+    src/lanczos_gluon.cpp
     src/observe.cpp
     src/check.cpp
     src/cli.cpp
+    src/dump.cpp
 )
 target_include_directories(fqhe PRIVATE include ${MKLROOT}/include)
 target_compile_definitions(fqhe PRIVATE BLQH_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

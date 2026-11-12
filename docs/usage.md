@@ -70,4 +70,6 @@ The label is a finite-size indicator, not a thermodynamic phase boundary. In the
 
 ## Solvers
 
-The dense path in `src/solve.cpp` is MKL `LAPACKE_zheevd`. Lanczos consumes the same CSR and rotates the ground state back into the Fock basis, which is what the order parameters use. A GPU dense or sparse solver replaces the diagonalization and the matrix-vector product in that file.
+The dense path in `src/solve.cpp` is MKL `LAPACKE_zheevd`. Lanczos consumes the same CSR and rotates the ground state back into the Fock basis, which is what the order parameters use.
+
+`--lanczos-kernel` selects the Lanczos matvec. `scalar` is the default loop in `solve.cpp`. `mkl` is `mkl_sparse_z_mv` plus BLAS reorthogonalization (`src/lanczos_mkl.cpp`). `gluon` runs `python/blqh/lanczos_gluon.py` on the visible GPU and accepts at most 40 steps. Naming either accelerated kernel also selects Lanczos when the sector would otherwise be dense. `TEPHRA` is not involved. Gluon needs `python3` (or `BLQH_PYTHON`) to import Triton, and it inherits `PYTHONPATH`.

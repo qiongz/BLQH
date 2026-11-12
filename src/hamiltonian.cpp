@@ -305,6 +305,43 @@ double diagonal_shift(const System &sys, const Sector &sector, std::uint64_t det
     return diag;
 }
 
+void fill_row(const Builder &builder, int i, std::map<int, std::complex<double>> &acc) {
+    const System &sys = builder.sys;
+    const Sector &sector = builder.sector;
+    const int Dl = (sys.K < 0) ? 1 : sector.period[i];
+    for (int ql = 0; ql < Dl; ++ql) {
+        int signl = 1;
+        const std::uint64_t lbasis = (ql == 0) ? sector.id[i] : sector.translate(sector.id[i], ql, signl);
+        if (sys.model == Model::Monolayer) {
+            scatter_monolayer_row(builder, lbasis, acc);
+        } else {
+            const int nf = sector.nflavor;
+            for (int a = 0; a < nf; ++a) {
+                for (int b = a; b < nf; ++b) {
+                    const bool same_layer = sector.flavors[a].layer == sector.flavors[b].layer;
+                    scatter_pair(builder, lbasis, a, b, ql, signl, Dl, same_layer, acc);
+                }
+            }
+            if (sys.model == Model::Bilayer && nf >= 2)
+                scatter_hop(builder, lbasis, 0, 1, -0.5 * sys.delta_sas, ql, signl, Dl, acc);
+            if (sys.model == Model::Spin && nf == 4) {
+                scatter_hop(builder, lbasis, 0, 2, -0.5 * sys.delta_sas, ql, signl, Dl, acc);
+                scatter_hop(builder, lbasis, 1, 3, -0.5 * sys.delta_sas, ql, signl, Dl, acc);
+                scatter_hop(builder, lbasis, 0, 3, -0.5 * sys.delta_sf, ql, signl, Dl, acc);
+                scatter_hop(builder, lbasis, 1, 2, -0.5 * sys.delta_sf, ql, signl, Dl, acc);
+            }
+        }
+    }
+    acc[i] += diagonal_shift(sys, sector, sector.id[i], builder.e_classical);
+}
+
+int stored_nnz(const std::map<int, std::complex<double>> &acc) {
+    int count = 0;
+    for (const auto &kv : acc)
+        if (std::abs(kv.second) > 1e-10) ++count;
+    return count;
+}
+
 }  // namespace
 
 Csr build_hop(const System &sys, const Sector &sector, HopChannel channel) {
@@ -361,34 +398,7 @@ Csr build_hamiltonian(const System &sys, const Sector &sector, const Geometry &g
     #pragma omp parallel for schedule(dynamic, 4)
     for (int i = 0; i < n; ++i) {
         std::map<int, std::complex<double>> acc;
-        const int Dl = (sys.K < 0) ? 1 : sector.period[i];
-        const int ql_max = Dl;
-        for (int ql = 0; ql < ql_max; ++ql) {
-            int signl = 1;
-            const std::uint64_t lbasis =
-                (ql == 0) ? sector.id[i] : sector.translate(sector.id[i], ql, signl);
-            if (sys.model == Model::Monolayer) {
-                scatter_monolayer_row(builder, lbasis, acc);
-            } else {
-                const int nf = sector.nflavor;
-                for (int a = 0; a < nf; ++a) {
-                    for (int b = a; b < nf; ++b) {
-                        const bool same_layer = sector.flavors[a].layer == sector.flavors[b].layer;
-                        scatter_pair(builder, lbasis, a, b, ql, signl, Dl, same_layer, acc);
-                    }
-                }
-                if (sys.model == Model::Bilayer && nf >= 2)
-                    scatter_hop(builder, lbasis, 0, 1, -0.5 * sys.delta_sas, ql, signl, Dl, acc);
-                if (sys.model == Model::Spin && nf == 4) {
-                    // Same spin across the layers, then the two spin-flip channels.
-                    scatter_hop(builder, lbasis, 0, 2, -0.5 * sys.delta_sas, ql, signl, Dl, acc);
-                    scatter_hop(builder, lbasis, 1, 3, -0.5 * sys.delta_sas, ql, signl, Dl, acc);
-                    scatter_hop(builder, lbasis, 0, 3, -0.5 * sys.delta_sf, ql, signl, Dl, acc);
-                    scatter_hop(builder, lbasis, 1, 2, -0.5 * sys.delta_sf, ql, signl, Dl, acc);
-                }
-            }
-        }
-        acc[i] += diagonal_shift(sys, sector, sector.id[i], builder.e_classical);
+        fill_row(builder, i, acc);
         rows[i] = std::move(acc);
     }
 
@@ -405,6 +415,21 @@ Csr build_hamiltonian(const System &sys, const Sector &sector, const Geometry &g
         H.row_ptr.push_back(static_cast<long>(H.col.size()));
     }
     return H;
+}
+
+double sample_hamiltonian_nnz_per_row(const System &sys, const Sector &sector, const Geometry &geom, int samples) {
+    if (sector.nbasis <= 0) return 0.0;
+    if (samples < 1) samples = 1;
+    if (samples > sector.nbasis) samples = sector.nbasis;
+    Builder builder(sys, sector, geom);
+    long long total = 0;
+    for (int s = 0; s < samples; ++s) {
+        const int i = static_cast<int>((static_cast<long long>(s) * sector.nbasis) / samples);
+        std::map<int, std::complex<double>> acc;
+        fill_row(builder, i, acc);
+        total += stored_nnz(acc);
+    }
+    return static_cast<double>(total) / static_cast<double>(samples);
 }
 
 }  // namespace blqh

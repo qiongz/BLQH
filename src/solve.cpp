@@ -45,11 +45,47 @@ Spectrum diagonalize(const Csr &H, bool vectors) {
     return spec;
 }
 
+std::vector<std::complex<double>> lanczos_start(int n, unsigned seed) {
+    std::mt19937 rng(seed);
+    std::uniform_real_distribution<double> dist(-0.5, 0.5);
+    std::vector<std::complex<double>> q(n);
+    for (int i = 0; i < n; ++i) q[i] = {dist(rng), dist(rng)};
+    const double n0 = norm(q);
+    if (n0 == 0.0) throw std::runtime_error("Lanczos start vector is zero");
+    for (auto &x : q) x /= n0;
+    return q;
+}
+
+const char *lanczos_kernel_name(LanczosKernel kernel) {
+    switch (kernel) {
+    case LanczosKernel::Scalar: return "scalar";
+    case LanczosKernel::Mkl: return "mkl";
+    case LanczosKernel::Gluon: return "gluon";
+    }
+    return "scalar";
+}
+
+LanczosKernel lanczos_kernel_from_name(const std::string &name) {
+    if (name == "scalar") return LanczosKernel::Scalar;
+    if (name == "mkl") return LanczosKernel::Mkl;
+    if (name == "gluon") return LanczosKernel::Gluon;
+    throw std::runtime_error("lanczos kernel must be scalar, mkl, or gluon, got " + name);
+}
+
+GroundState lanczos_mkl(const Csr &H, int steps, unsigned seed, int threads);
+GroundState lanczos_gluon(const Csr &H, int steps, unsigned seed);
+
 double lanczos_lowest(const Csr &H, int steps, unsigned seed) {
     return lowest_state(H, false, steps, seed).energy;
 }
 
-GroundState lowest_state(const Csr &H, bool dense, int steps, unsigned seed) {
+GroundState lanczos_ground(const Csr &H, int steps, unsigned seed, LanczosKernel kernel, int threads) {
+    if (kernel == LanczosKernel::Mkl) return lanczos_mkl(H, steps, seed, threads);
+    if (kernel == LanczosKernel::Gluon) return lanczos_gluon(H, steps, seed);
+    return lowest_state(H, false, steps, seed, LanczosKernel::Scalar, threads);
+}
+
+GroundState lowest_state(const Csr &H, bool dense, int steps, unsigned seed, LanczosKernel kernel, int threads) {
     const int n = H.n;
     if (n == 0) throw std::runtime_error("empty Hamiltonian");
     if (dense) {
@@ -63,16 +99,12 @@ GroundState lowest_state(const Csr &H, bool dense, int steps, unsigned seed) {
         for (int i = 0; i < n; ++i) g.psi[i] = spec.evec[static_cast<size_t>(i)];
         return g;
     }
+    if (kernel != LanczosKernel::Scalar) return lanczos_ground(H, steps, seed, kernel, threads);
     if (steps > n) steps = n;
     if (steps < 1) throw std::runtime_error("Lanczos steps must be positive");
 
-    std::mt19937 rng(seed);
-    std::uniform_real_distribution<double> dist(-0.5, 0.5);
     std::vector<std::vector<std::complex<double>>> basis(steps);
-    basis[0].resize(n);
-    for (int i = 0; i < n; ++i) basis[0][i] = {dist(rng), dist(rng)};
-    const double n0 = norm(basis[0]);
-    for (auto &x : basis[0]) x /= n0;
+    basis[0] = lanczos_start(n, seed);
 
     for (int j = 0; j < steps - 1; ++j) {
         auto w = matvec(H, basis[j]);
@@ -108,7 +140,7 @@ GroundState lowest_state(const Csr &H, bool dense, int steps, unsigned seed) {
     GroundState g;
     g.energy = eval[0];
     g.dense = false;
-    g.lowest.push_back(eval[0]);
+    g.lowest.assign(eval.begin(), eval.end());
     g.psi.assign(n, 0.0);
     for (int j = 0; j < steps; ++j) {
         const std::complex<double> weight = K[static_cast<size_t>(j)];

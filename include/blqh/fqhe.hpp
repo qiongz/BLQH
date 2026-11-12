@@ -150,9 +150,27 @@ int total_electrons(const System &sys);
 Sector build_sector(const System &sys);
 Csr build_hamiltonian(const System &sys, const Sector &sector, const Geometry &geom);
 Csr build_hop(const System &sys, const Sector &sector, HopChannel channel);
+// Mean stored nonzeros per row, from `samples` evenly spaced basis states.
+// Same drop tolerance as build_hamiltonian. Used to refuse a CSR that will not fit.
+double sample_hamiltonian_nnz_per_row(const System &sys, const Sector &sector, const Geometry &geom, int samples);
+// `fqhe dump-ham`. Writes one Laughlin CSR, or only prints sector dimensions.
+int dump_ham_main(int argc, char **argv);
+// Lanczos matvec and reorthogonalization. Scalar is the historical loop in
+// solve.cpp and stays the default. Mkl uses mkl_sparse_z_mv and BLAS.
+// Gluon is the device-resident kernel in python/blqh/lanczos_gluon.py.
+enum class LanczosKernel { Scalar, Mkl, Gluon };
+
+const char *lanczos_kernel_name(LanczosKernel kernel);
+LanczosKernel lanczos_kernel_from_name(const std::string &name);
+std::vector<std::complex<double>> lanczos_start(int n, unsigned seed);
+
 Spectrum diagonalize(const Csr &H, bool vectors);
 double lanczos_lowest(const Csr &H, int steps, unsigned seed);
-GroundState lowest_state(const Csr &H, bool dense, int steps, unsigned seed);
+// `threads` is the MKL thread count. Zero uses 64. Gluon ignores it.
+// The Gluon kernel accepts at most 40 steps.
+GroundState lowest_state(const Csr &H, bool dense, int steps, unsigned seed,
+                         LanczosKernel kernel = LanczosKernel::Scalar, int threads = 0);
+GroundState lanczos_ground(const Csr &H, int steps, unsigned seed, LanczosKernel kernel, int threads = 0);
 Order measure(const System &sys, const Sector &sector, const std::vector<std::complex<double>> &psi);
 std::string classify_phase(const Order &order);
 int run_checks(int threads, bool full);
