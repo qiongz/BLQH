@@ -72,4 +72,14 @@ The label is a finite-size indicator, not a thermodynamic phase boundary. In the
 
 The dense path in `src/solve.cpp` is MKL `LAPACKE_zheevd`. Lanczos consumes the same CSR and rotates the ground state back into the Fock basis, which is what the order parameters use.
 
-`--lanczos-kernel` selects the Lanczos matvec. `scalar` is the default loop in `solve.cpp`. `mkl` is `mkl_sparse_z_mv` plus BLAS reorthogonalization (`src/lanczos_mkl.cpp`). `gluon` runs `python/blqh/lanczos_gluon.py` on the visible GPU and accepts at most 40 steps. Naming either accelerated kernel also selects Lanczos when the sector would otherwise be dense. `TEPHRA` is not involved. Gluon needs `python3` (or `BLQH_PYTHON`) to import Triton, and it inherits `PYTHONPATH`.
+```bash
+cmake -S . -B build -DMKLROOT=/opt/intel/oneapi/mkl/2025.2
+cmake --build build -j
+./build/fqhe point --nphi 6 --upper 2 --lower 1 --lanczos --steps 40 \
+  --lanczos-kernel mkl --threads 64
+./build/fqhe dump-ham --nel 6 --J -1 --out ham.npz
+```
+
+`--lanczos-kernel` selects the Lanczos matvec. `scalar` is the default loop in `solve.cpp`. `mkl` is `mkl_sparse_z_mv` plus BLAS reorthogonalization (`src/lanczos_mkl.cpp`) and uses `--threads` (the flag defaults to 80; pass 0 only from the library, which then uses 64). `gluon` runs `python/blqh/lanczos_gluon.py` on the visible GPU and accepts at most 40 steps. CMake does not compile that file. The process needs `python3` or `BLQH_PYTHON`, and `PYTHONPATH` must already be able to import Triton; the program prepends this tree's `python/` directory. Naming `mkl` or `gluon` also selects Lanczos when the sector would otherwise be dense. The CSV `solver` column is `lanczos`, `lanczos-mkl`, or `lanczos-gluon`.
+
+`dump-ham` writes one square-torus Laughlin CSR (`N_φ = 3N`, `γ = 1`). `J < 0` is the full Fock space.

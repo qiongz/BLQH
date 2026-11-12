@@ -13,6 +13,8 @@ cmake -S . -B build -DMKLROOT=/opt/intel/oneapi/mkl/2025.2
 cmake --build build -j
 ```
 
+That builds `build/fqhe`, including the MKL Lanczos kernel and the launcher that calls the Gluon kernel. The Gluon kernel itself is Python (`python/blqh/lanczos_gluon.py`). CMake does not compile it. At run time it needs `python3` on `PATH` (or `BLQH_PYTHON`), a visible GPU, and a `PYTHONPATH` that can import Triton. The program prepends `python/` from this tree.
+
 The executable is `build/fqhe`. Regression:
 
 ```bash
@@ -70,7 +72,16 @@ One determinant is a `uint64_t`. Each flavor occupies a contiguous block of $`N_
   --d 0:2:0.25 --delta-nu 0:1 --out imbalance.csv
 ```
 
-Dimensions up to 800 are diagonalized densely, and a few excitations above the ground state are reported. Larger sectors use Lanczos and keep the ground state. `--dense` or `--lanczos` forces the choice.
+```bash
+# Export one Laughlin CSR. J < 0 is the full Fock space.
+./build/fqhe dump-ham --nel 6 --J -1 --out ham.npz
+
+# Lanczos kernel: scalar (default), mkl, or gluon. Gluon accepts at most 40 steps.
+./build/fqhe point --nphi 6 --upper 2 --lower 1 --lanczos --steps 40 \
+  --lanczos-kernel mkl --threads 64
+```
+
+Dimensions up to 800 are diagonalized densely, and a few excitations above the ground state are reported. Larger sectors use Lanczos and keep the ground state. `--dense` or `--lanczos` forces the choice. `--lanczos-kernel mkl` or `gluon` also forces Lanczos. `scalar` is the loop in `src/solve.cpp`. `mkl` uses `mkl_sparse_z_mv` and the `--threads` count (the flag defaults to 80). `gluon` keeps the Krylov basis on the GPU.
 
 Columns and order parameters are defined in [docs/usage.md](docs/usage.md).
 
@@ -80,14 +91,18 @@ Columns and order parameters are defined in [docs/usage.md](docs/usage.md).
 include/blqh/fqhe.hpp    parameters, sector, Hamiltonian, solvers, order parameters
 src/sector.cpp           flavors, combinations, magnetic translations
 src/hamiltonian.cpp      Coulomb interaction, one-body fields, CSR
-src/solve.cpp            MKL ZHEEVD and Lanczos
+src/solve.cpp            dense ZHEEVD and the default scalar Lanczos
+src/lanczos_mkl.cpp      optional MKL sparse Lanczos
+src/lanczos_gluon.cpp    writes the CSR to the Gluon kernel and reads the ground state back
+src/dump.cpp             fqhe dump-ham
 src/observe.cpp          order parameters
 src/cli.cpp              command line
 src/check.cpp            regression
+python/blqh/             Gluon CSR matvec and Lanczos
 tests/ref/               monolayer reference spectra
 ```
 
-The dense path calls MKL `LAPACKE_zheevd`. A different LAPACK build or a later GPU solver replaces `src/solve.cpp` and the link line. The sector and the Hamiltonian stay put. Lanczos reads the same CSR.
+The dense path calls MKL `LAPACKE_zheevd`. Lanczos reads the same CSR and returns the ground state in the Fock basis. `check` still uses the scalar Lanczos.
 
 ## License
 
